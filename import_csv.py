@@ -1,12 +1,21 @@
 import duckdb
 import numpy
 from fastapi.encoders import jsonable_encoder
+import csv
+from services.clean_csv import clean_csv_in_chunks
+
+
 
 con = duckdb.connect("my_database.db")
 
+
 def create():
-    con.sql("CREATE TABLE  AS FROM read_csv_auto('db/test.csv');")
-    con.sql("COPY deaths FROM 'db/test.csv'")
+    clean_csv_in_chunks('db/def00_19_v2.csv', 'db/cleaned_file.csv')
+    con.sql(f"""CREATE OR REPLACE TABLE deaths AS
+            SELECT * FROM read_csv_auto('db/cleaned_file.csv',
+                    auto_detect=true,
+                    header=true);""")
+    #con.sql("COPY deaths FROM 'db/test.csv'")
     con.close()
 
 def show():
