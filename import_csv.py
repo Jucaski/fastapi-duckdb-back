@@ -6,9 +6,6 @@ from services.clean_csv import clean_csv_in_chunks
 
 
 
-con = duckdb.connect("my_database.db")
-
-
 def create():
     clean_csv_in_chunks('db/def00_19_v2.csv', 'db/cleaned_file.csv')
     con.sql(f"""CREATE OR REPLACE TABLE deaths AS

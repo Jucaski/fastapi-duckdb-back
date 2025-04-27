@@ -38,7 +38,9 @@ async def lists(con: DuckDBConn = Depends(get_db)):
 
 @app.get("/show")
 async def lists2(con: DuckDBConn = Depends(get_db)):
-    return show()
+    tables = con.sql("SHOW TABLES")
+    result = tables.to_df().to_dict(orient="records")
+    return {"tables": result}
 
 @app.get("/columns")
 async def get_columns(con: DuckDBConn = Depends(get_db)):
@@ -47,5 +49,5 @@ async def get_columns(con: DuckDBConn = Depends(get_db)):
 
 @app.get("/unique_columns")
 async def get_unique_columns(col1: str, col2: str, con: DuckDBConn = Depends(get_db)):
-    result = unique_columns(col1, col2)
+    result = con.sql(f"SELECT DISTINCT {col1}, {col2} FROM deaths;").fetchall()
     return result
