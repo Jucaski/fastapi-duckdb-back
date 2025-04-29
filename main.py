@@ -3,6 +3,7 @@ from import_csv import create, show, columns, unique_columns
 from services.clean_csv import clean_csv_in_chunks
 from contextlib import contextmanager
 from typing import Generator
+from fastapi.encoders import jsonable_encoder
 import duckdb
 
 app = FastAPI()
@@ -11,7 +12,7 @@ DuckDBConn = duckdb.DuckDBPyConnection
 
 @contextmanager
 def get_db_connection() -> Generator[duckdb.DuckDBPyConnection, None, None]:
-    con = duckdb.connect("my_database.db")
+    con = duckdb.connect("db/my_database.db")
     try:
         yield con
     finally:
@@ -44,8 +45,9 @@ async def lists2(con: DuckDBConn = Depends(get_db)):
 
 @app.get("/columns")
 async def get_columns(con: DuckDBConn = Depends(get_db)):
-    result = columns()
-    return result
+    rel = con.sql(f"DESCRIBE deaths")
+    column_names = [row[0] for row in rel.fetchall()] 
+    return jsonable_encoder({"columns": column_names})
 
 @app.get("/unique_columns")
 async def get_unique_columns(col1: str, col2: str, con: DuckDBConn = Depends(get_db)):
