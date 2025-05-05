@@ -110,6 +110,7 @@ async def get_second_class_list(id_sick: str, con: DuckDBConn = Depends(get_db))
             SELECT DISTINCT CVE_Grupo, Grupo
             FROM death_cause_agg
             WHERE CVE_Enfermedad = ?
+            ORDER BY Grupo
         """, params=[id_sick]).fetchall()
         return result if result else {"message": "No data found"}
     except Exception as e:
@@ -124,6 +125,7 @@ async def get_third_class_list(id_sick: str, id_second_class: str, con: DuckDBCo
             SELECT DISTINCT CVE_Causa_def, Causa_def
             FROM death_cause_agg
             WHERE CVE_Grupo = ? AND CVE_Enfermedad = ?
+            ORDER BY Causa_def
         """, params=[id_second_class, id_sick]).fetchall()
         return result if result else {"message": "No data found"}
     except Exception as e:
