@@ -35,8 +35,8 @@ def get_db() -> duckdb.DuckDBPyConnection:
 def init_db():
     try:
         db_connection.sql("""
-            CREATE TABLE IF NOT EXISTS death_cause_agg AS
-            SELECT DISTINCT CVE_Grupo, CVE_Enfermedad, CVE_Causa_def, Causa_def
+            CREATE OR REPLACE TABLE death_cause_agg AS
+            SELECT DISTINCT CVE_Grupo, Grupo, CVE_Enfermedad, CVE_Causa_def, Causa_def
             FROM deaths;
         """)
         db_connection.sql("CREATE INDEX IF NOT EXISTS idx_group_sick ON death_cause_agg (CVE_Grupo, CVE_Enfermedad);")
@@ -100,13 +100,28 @@ async def get_unique_columns(column1: str, column2: str, con: DuckDBConn = Depen
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Query error: {str(e)}")
 
+
+@app.get("/get_second_class")
+async def get_second_class_list(id_sick: str, con: DuckDBConn = Depends(get_db)):
+    try:
+        if not id_sick:
+            raise HTTPException(status_code=400, detail="Invalid input: id_sick are required")
+        result = con.sql("""
+            SELECT DISTINCT CVE_Grupo, Grupo
+            FROM death_cause_agg
+            WHERE CVE_Enfermedad = ?
+        """, params=[id_sick]).fetchall()
+        return result if result else {"message": "No data found"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Query error: {str(e)}")
+
 @app.get("/get_third_class")
-async def get_unique_columns(id_sick: str, id_second_class: str, con: DuckDBConn = Depends(get_db)):
+async def get_third_class_list(id_sick: str, id_second_class: str, con: DuckDBConn = Depends(get_db)):
     try:
         if not id_sick or not id_second_class:
             raise HTTPException(status_code=400, detail="Invalid input: id_sick and id_second_class are required")
         result = con.sql("""
-            SELECT CVE_Causa_def, Causa_def
+            SELECT DISTINCT CVE_Causa_def, Causa_def
             FROM death_cause_agg
             WHERE CVE_Grupo = ? AND CVE_Enfermedad = ?
         """, params=[id_second_class, id_sick]).fetchall()
