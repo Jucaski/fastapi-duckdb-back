@@ -130,3 +130,13 @@ async def get_third_class_list(id_sick: str, id_second_class: str, con: DuckDBCo
         return result if result else {"message": "No data found"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Query error: {str(e)}")
+
+@app.get("/get_records_year")
+async def get_records_year(year: str, con: DuckDBConn = Depends(get_db)):
+    result = con.sql(f"SELECT * FROM * WHERE Anio={year};").fetchall()
+    return result
+
+@app.get("/get_unique_num_values")
+async def get_unique_num_values(value: int, con: DuckDBConn = Depends(get_db)):
+    result = con.sql(f"SELECT DISTINCT * FROM * WHERE ;").fetchall()
+    return result

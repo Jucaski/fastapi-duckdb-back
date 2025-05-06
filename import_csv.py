@@ -3,16 +3,25 @@ import numpy
 from fastapi.encoders import jsonable_encoder
 import csv
 from services.clean_csv import clean_csv_in_chunks
+from os import listdir
+from os.path import isfile, join
 
 
 
 def create():
-    clean_csv_in_chunks('db/def00_19_v2.csv', 'db/cleaned_file.csv')
-    con.sql(f"""CREATE OR REPLACE TABLE deaths AS
-            SELECT * FROM read_csv_auto('db/cleaned_file.csv',
-                    auto_detect=true,
-                    header=true);""")
-    #con.sql("COPY deaths FROM 'db/test.csv'")
+    csv_file_dir = ""
+    csv_cleaned_name = ""
+    files_in_db_directory = []
+    for file in listdir('db/'):
+        if file.endswith(".csv"):
+            csv_file_dir = join('db/', file)
+            csv_cleaned_name = join('db/cleaned_', file)
+            files_in_db_directory.append(file)
+            clean_csv_in_chunks(csv_file_dir, csv_cleaned_name)
+            con.sql(f"""CREATE OR REPLACE TABLE deaths AS
+                    SELECT * FROM read_csv_auto({csv_cleaned_name},
+                    auto_detect=true, header=true);""")
+            #con.sql("COPY deaths FROM 'db/test.csv'")
     con.close()
 
 def show():
