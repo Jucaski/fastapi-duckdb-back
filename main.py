@@ -6,6 +6,8 @@ from fastapi.encoders import jsonable_encoder
 from services.clean_csv import clean_csv_in_chunks
 import os
 
+from os import listdir
+from os.path import isfile, join, splitext
 import duckdb
 
 app = FastAPI()
@@ -80,17 +82,40 @@ async def root(con: DuckDBConn = Depends(get_db)):
 @app.get("/create")
 async def create_table(con: DuckDBConn = Depends(get_db)):
     try:
-        if not os.path.exists('db/cleaned_file.csv'):
-            clean_csv_in_chunks('db/def00_19_v2.csv', 'db/cleaned_file.csv')
-        con.sql("""
-            COPY (SELECT * FROM read_csv_auto('db/cleaned_file.csv', auto_detect=true, header=true))
-            TO 'db/deaths.parquet' (FORMAT PARQUET);
-        """)
-        con.sql("""
-            CREATE OR REPLACE TABLE deaths AS
-            SELECT * FROM 'db/deaths.parquet';
-        """)
-        return {"status": "Table created from Parquet"}
+        first_chunk = True
+        db_dir = "db"
+        for file in listdir("db/"):
+            #First, we check for .csv files that area not cleaned
+            if file.endswith(".csv") and not file.startswith("cleaned_"):
+                csv_file_dir = join(db_dir, file)
+                name_of_cleaned_file = "cleaned_table_file.csv"
+                csv_cleaned_name = join(db_dir, name_of_cleaned_file)
+                #If the file cleaned_file does not exist, we clean and create it
+                if not isfile(csv_cleaned_name):
+                    clean_csv_in_chunks(first_chunk, csv_file_dir, csv_cleaned_name)
+                #We create the table
+                con.sql(f"""
+                        CREATE OR REPLACE TABLE deaths AS
+                        SELECT * FROM read_csv_auto('{csv_cleaned_name}',
+                        auto_detect=true, header=true);""")
+                con.sql(f"""
+                        COPY (SELECT * FROM read_csv_auto('{csv_cleaned_name}', auto_detect=true, header=true))
+                        TO 'db/deaths.parquet' (FORMAT PARQUET);""")
+                con.sql("""CREATE OR REPLACE TABLE deaths AS SELECT * FROM 'db/deaths.parquet';""")
+                #Finally, we lower all column names for ease of access
+                table_name = "deaths"
+                columns = con.sql(f"SELECT * FROM {table_name}").columns
+                for column in columns:
+                    if isinstance(column, str):
+                        temp_column_name = column
+                        column_name_lower = temp_column_name.lower()
+                        if (temp_column_name != column_name_lower):
+                            con.sql(f"""ALTER TABLE {table_name} RENAME COLUMN {temp_column_name} TO 
+                                    {column_name_lower}""")
+                if first_chunk:
+                    first_chunk = False
+                con.close()
+                return {"status": "Table created from Parquet"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error creating table: {str(e)}")
 
@@ -127,10 +152,10 @@ async def get_second_class_list(id_sick: str, con: DuckDBConn = Depends(get_db))
         if not id_sick:
             raise HTTPException(status_code=400, detail="Invalid input: id_sick are required")
         result = con.sql("""
-            SELECT DISTINCT CVE_Grupo, Grupo
+            SELECT DISTINCT cve_grupo, grupo
             FROM death_cause_agg
-            WHERE CVE_Enfermedad = ?
-            ORDER BY Grupo
+            WHERE cve_enfermedad = ?
+            ORDER BY grupo
         """, params=[id_sick]).fetchall()
         return result if result else {"message": "No data found"}
     except Exception as e:
@@ -142,10 +167,10 @@ async def get_third_class_list(id_sick: str, id_second_class: str, con: DuckDBCo
         if not id_sick or not id_second_class:
             raise HTTPException(status_code=400, detail="Invalid input: id_sick and id_second_class are required")
         result = con.sql("""
-            SELECT DISTINCT CVE_Causa_def, Causa_def
+            SELECT DISTINCT cve_causa_def, causa_def
             FROM death_cause_agg
-            WHERE CVE_Grupo = ? AND CVE_Enfermedad = ?
-            ORDER BY Causa_def
+            WHERE cve_grupo = ? AND cve_enfermedad = ?
+            ORDER BY causa_def
         """, params=[id_second_class, id_sick]).fetchall()
         return result if result else {"message": "No data found"}
     except Exception as e:
@@ -153,7 +178,7 @@ async def get_third_class_list(id_sick: str, id_second_class: str, con: DuckDBCo
 
 # @app.get("/get_records_year")
 # async def get_records_year(year: str, con: DuckDBConn = Depends(get_db)):
-#     result = con.sql(f"SELECT * FROM deaths WHERE Anio={year};").fetchall()
+#     result = con.sql(f"SELECT * FROM deaths WHERE anio={year};").fetchall()
 #     return result
 
 @app.get("/get_unique")
