@@ -7,7 +7,6 @@ from os import listdir
 from os.path import isfile, join
 
 
-
 def create():
     csv_file_dir = ""
     csv_cleaned_name = ""
