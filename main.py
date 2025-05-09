@@ -81,14 +81,14 @@ async def create_table(con: DuckDBConn = Depends(get_db)):
                 files_in_db_directory.append(file)
                 if not isfile(csv_cleaned_name):
                     clean_csv_in_chunks(csv_file_dir, csv_cleaned_name)
-                con.sql(fr"""
+                con.sql(f"""
                         CREATE OR REPLACE TABLE deaths AS
-                        SELECT * FROM read_csv_auto({csv_cleaned_name},
+                        SELECT * FROM read_csv_auto({{{str(csv_cleaned_name)}}},
                         auto_detect=true, header=true);""")
                 #clean_csv_in_chunks(csv_file_dir, csv_cleaned_name)
                 #clean_csv_in_chunks('db/def00_19_v2.csv', 'db/cleaned_file.csv')
-                con.sql(fr"""
-                        COPY (SELECT * FROM read_csv_auto({csv_cleaned_name}, auto_detect=true, header=true))
+                con.sql(rf"""
+                        COPY (SELECT * FROM read_csv_auto(db\\cleaned_{file}, auto_detect=true, header=true))
                         TO 'db/deaths.parquet' (FORMAT PARQUET);""")
                 con.sql("""CREATE OR REPLACE TABLE deaths AS SELECT * FROM 'db/deaths.parquet';""")
                 con.close()
