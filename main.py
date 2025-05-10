@@ -5,7 +5,7 @@ from typing import Generator
 from fastapi.encoders import jsonable_encoder
 from services.clean_csv import clean_csv_in_chunks
 from os import listdir
-from os.path import isfile, join
+from os.path import isfile, join, splitext
 import duckdb
 
 app = FastAPI()
@@ -69,28 +69,36 @@ async def root(con: DuckDBConn = Depends(get_db)):
 @app.get("/create")
 async def create_table(con: DuckDBConn = Depends(get_db)):
     try:
-        db_dir = "db/"
-        files_in_db_directory = []
-        for file in listdir(db_dir):
-            if "cleaned" in file:
-                continue
-            csv_cleaned_name = "db/cleaned_" + file
-            csv_cleaned_name.lower()
-            if file.endswith(".csv"):
+        db_dir = "db"
+        for file in listdir("db/"):
+            #First, we check for .csv files that area not cleaned
+            if file.endswith(".csv") and not file.startswith("cleaned_"):
                 csv_file_dir = join(db_dir, file)
-                files_in_db_directory.append(file)
+                name_of_cleaned_file = "cleaned_" + file
+                csv_cleaned_name = join(db_dir, name_of_cleaned_file)
+                #If the file cleaned_file does not exist, we clean and create it
                 if not isfile(csv_cleaned_name):
                     clean_csv_in_chunks(csv_file_dir, csv_cleaned_name)
+                #table_name = splitext(file)[0] //Check later table names on another issue
+                #We create the table (for now with an static name)
                 con.sql(f"""
                         CREATE OR REPLACE TABLE deaths AS
-                        SELECT * FROM read_csv_auto({{{str(csv_cleaned_name)}}},
+                        SELECT * FROM read_csv_auto('{csv_cleaned_name}',
                         auto_detect=true, header=true);""")
-                #clean_csv_in_chunks(csv_file_dir, csv_cleaned_name)
-                #clean_csv_in_chunks('db/def00_19_v2.csv', 'db/cleaned_file.csv')
-                con.sql(rf"""
-                        COPY (SELECT * FROM read_csv_auto(db\\cleaned_{file}, auto_detect=true, header=true))
+                con.sql(f"""
+                        COPY (SELECT * FROM read_csv_auto('{csv_cleaned_name}', auto_detect=true, header=true))
                         TO 'db/deaths.parquet' (FORMAT PARQUET);""")
                 con.sql("""CREATE OR REPLACE TABLE deaths AS SELECT * FROM 'db/deaths.parquet';""")
+                #Finally, we lower all column names for ease of access
+                table_name = "deaths"
+                columns = con.sql(f"SELECT * FROM {table_name}").columns
+                for column in columns:
+                    if isinstance(column, str):
+                        temp_column_name = column
+                        column_name_lower = temp_column_name.lower()
+                        if (temp_column_name != column_name_lower):
+                            con.sql(f"""ALTER TABLE {table_name} RENAME COLUMN {temp_column_name} TO 
+                                    {column_name_lower}""")
                 con.close()
                 return {"status": "Table created from Parquet"}
     except Exception as e:
