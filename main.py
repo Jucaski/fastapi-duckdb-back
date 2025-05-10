@@ -131,10 +131,10 @@ async def get_second_class_list(id_sick: str, con: DuckDBConn = Depends(get_db))
         if not id_sick:
             raise HTTPException(status_code=400, detail="Invalid input: id_sick are required")
         result = con.sql("""
-            SELECT DISTINCT CVE_Grupo, Grupo
+            SELECT DISTINCT cve_grupo, grupo
             FROM death_cause_agg
-            WHERE CVE_Enfermedad = ?
-            ORDER BY Grupo
+            WHERE cve_enfermedad = ?
+            ORDER BY grupo
         """, params=[id_sick]).fetchall()
         return result if result else {"message": "No data found"}
     except Exception as e:
@@ -146,10 +146,10 @@ async def get_third_class_list(id_sick: str, id_second_class: str, con: DuckDBCo
         if not id_sick or not id_second_class:
             raise HTTPException(status_code=400, detail="Invalid input: id_sick and id_second_class are required")
         result = con.sql("""
-            SELECT DISTINCT CVE_Causa_def, Causa_def
+            SELECT DISTINCT cve_causa_def, causa_def
             FROM death_cause_agg
-            WHERE CVE_Grupo = ? AND CVE_Enfermedad = ?
-            ORDER BY Causa_def
+            WHERE cve_grupo = ? AND cve_enfermedad = ?
+            ORDER BY causa_def
         """, params=[id_second_class, id_sick]).fetchall()
         return result if result else {"message": "No data found"}
     except Exception as e:
@@ -157,7 +157,7 @@ async def get_third_class_list(id_sick: str, id_second_class: str, con: DuckDBCo
 
 # @app.get("/get_records_year")
 # async def get_records_year(year: str, con: DuckDBConn = Depends(get_db)):
-#     result = con.sql(f"SELECT * FROM deaths WHERE Anio={year};").fetchall()
+#     result = con.sql(f"SELECT * FROM deaths WHERE anio={year};").fetchall()
 #     return result
 
 @app.get("/get_unique")
