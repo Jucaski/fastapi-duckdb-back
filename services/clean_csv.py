@@ -3,7 +3,7 @@ import chardet
 from io import StringIO
 import os
 
-def detect_encoding(file_path, sample_size=10000):
+def detect_encoding(file_path, sample_size=1000000):
     """Detect file encoding from a sample."""
     with open(file_path, 'rb') as f:
         sample = f.read(sample_size)
@@ -17,7 +17,7 @@ def clean_csv_in_chunks(input_path, output_path, chunk_size=100000):
     print(f"Detected encoding: {encoding} with confidence: {confidence}")
     
     # Process in chunks
-    chunks = pd.read_csv(input_path, chunksize=chunk_size, encoding='latin-1', 
+    chunks = pd.read_csv(input_path, chunksize=chunk_size, encoding=encoding, 
                         on_bad_lines='warn', low_memory=True)
     
     # Write header to output file
