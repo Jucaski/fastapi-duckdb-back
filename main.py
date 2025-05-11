@@ -43,6 +43,15 @@ def init_db():
         """)
         db_connection.sql("CREATE INDEX IF NOT EXISTS idx_group_sick ON death_cause_agg (CVE_Grupo, CVE_Enfermedad);")
         print("Table 'death_cause_agg' and index created successfully.")
+        clean_csv_in_chunks('db/def00_19_v2.csv', 'db/cleaned_file.csv')
+        con.sql("""
+            COPY (SELECT * FROM read_csv_auto('db/cleaned_file.csv', auto_detect=true, header=true))
+            TO 'db/deaths.parquet' (FORMAT PARQUET);
+        """)
+        con.sql("""
+            CREATE OR REPLACE TABLE deaths AS
+            SELECT * FROM 'db/deaths.parquet';
+        """)
     except Exception as e:
         print(f"Error creating table: {e}")
         tables = db_connection.sql("SHOW TABLES").fetchall()
@@ -84,15 +93,21 @@ async def create_table(con: DuckDBConn = Depends(get_db)):
 
 @app.get("/show")
 async def lists2(con: DuckDBConn = Depends(get_db)):
-    tables = con.sql("SHOW TABLES")
-    result = tables.to_df().to_dict(orient="records")
-    return {"tables": result}
+    try:
+        tables = con.sql("SHOW TABLES")
+        result = tables.to_df().to_dict(orient="records")
+        return {"tables": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Query error: {str(e)}")
 
 @app.get("/columns")
 async def get_columns(con: DuckDBConn = Depends(get_db)):
-    rel = con.sql("DESCRIBE deaths")
-    column_names = [row[0] for row in rel.fetchall()]
-    return jsonable_encoder({"columns": column_names})
+    try:
+        rel = con.sql("DESCRIBE deaths")
+        column_names = [row[0] for row in rel.fetchall()]
+        return jsonable_encoder({"columns": column_names})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Query error: {str(e)}")
 
 @app.get("/unique_columns")
 async def get_unique_columns(column1: str, column2: str, con: DuckDBConn = Depends(get_db)):
@@ -140,5 +155,8 @@ async def get_third_class_list(id_sick: str, id_second_class: str, con: DuckDBCo
 
 @app.get("/get_unique")
 async def get_unique_values(column_name: str, con: DuckDBConn = Depends(get_db)):
-    result = con.sql(f"SELECT DISTINCT {column_name} FROM deaths ORDER BY {column_name}").fetchall()
-    return result
+    try:
+        result = con.sql(f"SELECT DISTINCT {column_name} FROM deaths ORDER BY {column_name}").fetchall()
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
