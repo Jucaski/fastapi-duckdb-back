@@ -4,8 +4,8 @@ from contextlib import contextmanager
 from typing import Generator
 from fastapi.encoders import jsonable_encoder
 from services.clean_csv import clean_csv_in_chunks
-from os import listdir
-from os.path import isfile, join
+import os
+
 import duckdb
 
 app = FastAPI()
@@ -36,6 +36,16 @@ def get_db() -> duckdb.DuckDBPyConnection:
 
 def init_db():
     try:
+        if not os.path.exists('db/cleaned_file.csv'):
+            clean_csv_in_chunks('db/def00_19_v2.csv', 'db/cleaned_file.csv')
+        con.sql("""
+            COPY (SELECT * FROM read_csv_auto('db/cleaned_file.csv', auto_detect=true, header=true))
+            TO 'db/deaths';
+        """)
+        con.sql("""
+            CREATE OR REPLACE IF NOT EXISTS TABLE deaths AS
+            SELECT * FROM 'db/deaths';
+        """)
         db_connection.sql("""
             CREATE OR REPLACE TABLE death_cause_agg AS
             SELECT DISTINCT CVE_Grupo, Grupo, CVE_Enfermedad, CVE_Causa_def, Causa_def
@@ -43,15 +53,7 @@ def init_db():
         """)
         db_connection.sql("CREATE INDEX IF NOT EXISTS idx_group_sick ON death_cause_agg (CVE_Grupo, CVE_Enfermedad);")
         print("Table 'death_cause_agg' and index created successfully.")
-        clean_csv_in_chunks('db/def00_19_v2.csv', 'db/cleaned_file.csv')
-        con.sql("""
-            COPY (SELECT * FROM read_csv_auto('db/cleaned_file.csv', auto_detect=true, header=true))
-            TO 'db/deaths.parquet' (FORMAT PARQUET);
-        """)
-        con.sql("""
-            CREATE OR REPLACE TABLE deaths AS
-            SELECT * FROM 'db/deaths.parquet';
-        """)
+
     except Exception as e:
         print(f"Error creating table: {e}")
         tables = db_connection.sql("SHOW TABLES").fetchall()
