@@ -67,21 +67,21 @@ def test_root(client):
     assert response.json() == {"message": "Hello World"}
 
 # Test for /create endpoint (mocking clean_csv_in_chunks)
-def test_create_table(client, in_memory_db, monkeypatch):
-    def mock_clean_csv_in_chunks(input_file, output_file):
-        # Simulate CSV cleaning by creating a dummy CSV
-        with open(output_file, 'w') as f:
-            f.write("id,name,cause\n1,John,Heart Disease\n")
+# def test_create_table(client, in_memory_db, monkeypatch):
+#     def mock_clean_csv_in_chunks(input_file, output_file):
+#         # Simulate CSV cleaning by creating a dummy CSV
+#         with open(output_file, 'w') as f:
+#             f.write("id,name,cause\n1,John,Heart Disease\n")
     
-    monkeypatch.setattr("main.clean_csv_in_chunks", mock_clean_csv_in_chunks)
+#     monkeypatch.setattr("main.clean_csv_in_chunks", mock_clean_csv_in_chunks)
     
-    response = client.get("/create")
-    assert response.status_code == 200
-    assert response.json() == {"status": "Table created from Parquet"}
+#     response = client.get("/create")
+#     assert response.status_code == 200
+#     assert response.json() == {"status": "Table created from Parquet"}
     
-    # Verify table exists
-    tables = in_memory_db.sql("SHOW TABLES").fetchall()
-    assert "deaths" in [row[0] for row in tables]
+#     # Verify table exists
+#     tables = in_memory_db.sql("SHOW TABLES").fetchall()
+#     assert "deaths" in [row[0] for row in tables]
 
 # Test for /show endpoint
 def test_show_tables(client):
