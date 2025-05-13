@@ -69,18 +69,18 @@ async def root(con: DuckDBConn = Depends(get_db)):
 @app.get("/create")
 async def create_table(con: DuckDBConn = Depends(get_db)):
     try:
+        first_chunk = True
         db_dir = "db"
         for file in listdir("db/"):
             #First, we check for .csv files that area not cleaned
             if file.endswith(".csv") and not file.startswith("cleaned_"):
                 csv_file_dir = join(db_dir, file)
-                name_of_cleaned_file = "cleaned_" + file
+                name_of_cleaned_file = "cleaned_table_file.csv"
                 csv_cleaned_name = join(db_dir, name_of_cleaned_file)
                 #If the file cleaned_file does not exist, we clean and create it
                 if not isfile(csv_cleaned_name):
-                    clean_csv_in_chunks(csv_file_dir, csv_cleaned_name)
-                #table_name = splitext(file)[0] //Check later table names on another issue
-                #We create the table (for now with an static name)
+                    clean_csv_in_chunks(first_chunk, csv_file_dir, csv_cleaned_name)
+                #We create the table
                 con.sql(f"""
                         CREATE OR REPLACE TABLE deaths AS
                         SELECT * FROM read_csv_auto('{csv_cleaned_name}',
@@ -99,6 +99,8 @@ async def create_table(con: DuckDBConn = Depends(get_db)):
                         if (temp_column_name != column_name_lower):
                             con.sql(f"""ALTER TABLE {table_name} RENAME COLUMN {temp_column_name} TO 
                                     {column_name_lower}""")
+                if first_chunk:
+                    first_chunk = False
                 con.close()
                 return {"status": "Table created from Parquet"}
     except Exception as e:
