@@ -2,6 +2,7 @@ import pandas as pd
 import chardet
 from io import StringIO
 import os
+import unicodedata
 
 def detect_encoding(file_path, sample_size=1000000):
     """Detect file encoding from a sample."""
@@ -17,9 +18,9 @@ def clean_csv_in_chunks(input_path, output_path, chunk_size=100000):
     print(f"Detected encoding: {encoding} with confidence: {confidence}")
     
     # Process in chunks
-    chunks = pd.read_csv(input_path, chunksize=chunk_size, encoding=encoding, 
+    chunks = pd.read_csv(input_path, chunksize=chunk_size, sep=';', encoding='latin-1', 
                         on_bad_lines='warn', low_memory=True)
-    
+
     # Write header to output file
     first_chunk = True
     
@@ -30,10 +31,12 @@ def clean_csv_in_chunks(input_path, output_path, chunk_size=100000):
             if chunk[col].dtype == 'object':
                 chunk[col] = chunk[col].apply(lambda x: ''.join(ch for ch in str(x) 
                                                              if ord(ch) >= 32 or ch in '\n\r\t'))
+            #encode_result = chardet.detect(chunk[col])
+            #chunk[col].apply(lambda e: str(e).encode(encode_result['encoding']).decode('utf-8'))
         
         # 2. Handle mixed encodings if needed
         # This is often unnecessary if read_csv with latin-1 worked properly
-        
+
         # 3. Fix date formats, numeric values, etc. as needed for your data
         
         # Write to output file
