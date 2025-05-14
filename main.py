@@ -80,7 +80,8 @@ async def root(con: DuckDBConn = Depends(get_db)):
 @app.get("/create")
 async def create_table(con: DuckDBConn = Depends(get_db)):
     try:
-        clean_csv_in_chunks('db/def00_19_v2.csv', 'db/cleaned_file.csv')
+        if not os.path.exists('db/cleaned_file.csv'):
+            clean_csv_in_chunks('db/def00_19_v2.csv', 'db/cleaned_file.csv')
         con.sql("""
             COPY (SELECT * FROM read_csv_auto('db/cleaned_file.csv', auto_detect=true, header=true))
             TO 'db/deaths.parquet' (FORMAT PARQUET);
