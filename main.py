@@ -27,8 +27,9 @@ db_connection = None
 def get_db_connection() -> Generator[duckdb.DuckDBPyConnection, None, None]:
     con = duckdb.connect("db/my_database.db")
     try:
-        con.sql("SET threads TO 4;")
-        con.sql("SET memory_limit = '4GB';")
+        db_connection.sql("SET threads TO 8;")
+        db_connection.sql("SET memory_limit = '8GB';")
+        db_connection.sql("PRAGMA enable_parallelism;")
         yield con
     finally:
         con.close()
@@ -38,24 +39,32 @@ def get_db() -> duckdb.DuckDBPyConnection:
 
 def init_db():
     try:
-        if not os.path.exists('db/cleaned_file.csv'):
-            clean_csv_in_chunks('db/def00_19_v2.csv', 'db/cleaned_file.csv')
-        con.sql("""
+        # if not os.path.exists('db/cleaned_file.csv'):
+        #     clean_csv_in_chunks('db/def00_19_v2.csv', 'db/cleaned_file.csv')
+        db_connection.sql("""
             COPY (SELECT * FROM read_csv_auto('db/cleaned_file.csv', auto_detect=true, header=true))
-            TO 'db/deaths';
-        """)
-        con.sql("""
-            CREATE OR REPLACE IF NOT EXISTS TABLE deaths AS
-            SELECT * FROM 'db/deaths';
+            TO 'db/deaths.parquet' (FORMAT PARQUET);
         """)
         db_connection.sql("""
-            CREATE OR REPLACE TABLE death_cause_agg AS
+            CREATE OR REPLACE TABLE deaths AS
+            SELECT * FROM 'db/deaths.parquet';
+        """)
+        db_connection.sql("""
+            CREATE OR REPLACE TABLE ENFERMEDAD AS
             SELECT DISTINCT CVE_Grupo, Grupo, CVE_Enfermedad, CVE_Causa_def, Causa_def
             FROM deaths;
         """)
-        db_connection.sql("CREATE INDEX IF NOT EXISTS idx_group_sick ON death_cause_agg (CVE_Grupo, CVE_Enfermedad);")
-        print("Table 'death_cause_agg' and index created successfully.")
-
+        db_connection.sql("CREATE INDEX IF NOT EXISTS id_enfermedad ON ENFERMEDAD (CVE_Grupo, CVE_Enfermedad);")
+        years = db_connection.sql("SELECT DISTINCT Anio FROM deaths").fetchall()
+        for year in years:
+            year = year[0]
+            db_connection.sql(f"""
+                CREATE OR REPLACE TABLE temp_defunciones_{year} AS
+                SELECT DISTINCT CVE_Enfermedad, CVE_Grupo, CVE_Causa_def, CVE_Estado,
+                CVEGEO, CVE_Metropoli, Ambito, Sexo, Edad_gpo, Ocupacion, Escolaridad, Edo_civil, Anio
+                FROM deaths
+                WHERE Anio = {year};
+            """)
     except Exception as e:
         print(f"Error creating table: {e}")
         tables = db_connection.sql("SHOW TABLES").fetchall()
@@ -153,7 +162,7 @@ async def get_second_class_list(id_sick: str, con: DuckDBConn = Depends(get_db))
             raise HTTPException(status_code=400, detail="Invalid input: id_sick are required")
         result = con.sql("""
             SELECT DISTINCT cve_grupo, grupo
-            FROM death_cause_agg
+            FROM ENFERMEDAD
             WHERE cve_enfermedad = ?
             ORDER BY grupo
         """, params=[id_sick]).fetchall()
@@ -168,7 +177,7 @@ async def get_third_class_list(id_sick: str, id_second_class: str, con: DuckDBCo
             raise HTTPException(status_code=400, detail="Invalid input: id_sick and id_second_class are required")
         result = con.sql("""
             SELECT DISTINCT cve_causa_def, causa_def
-            FROM death_cause_agg
+            FROM ENFERMEDAD
             WHERE cve_grupo = ? AND cve_enfermedad = ?
             ORDER BY causa_def
         """, params=[id_second_class, id_sick]).fetchall()
@@ -176,10 +185,10 @@ async def get_third_class_list(id_sick: str, id_second_class: str, con: DuckDBCo
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Query error: {str(e)}")
 
-# @app.get("/get_records_year")
-# async def get_records_year(year: str, con: DuckDBConn = Depends(get_db)):
-#     result = con.sql(f"SELECT * FROM deaths WHERE anio={year};").fetchall()
-#     return result
+@app.get("/get_records_year")
+async def get_records_year(year: str, con: DuckDBConn = Depends(get_db)):
+    result = con.sql(f"SELECT * FROM temp_defunciones_{year};").fetchall()
+    return result
 
 @app.get("/get_unique")
 async def get_unique_values(column_name: str, con: DuckDBConn = Depends(get_db)):
