@@ -54,17 +54,12 @@ def init_db():
             SELECT DISTINCT CVE_Grupo, Grupo, CVE_Enfermedad, CVE_Causa_def, Causa_def
             FROM deaths;
         """)
-        db_connection.sql("CREATE INDEX IF NOT EXISTS id_enfermedad ON ENFERMEDAD (CVE_Grupo, CVE_Enfermedad);")
-        years = db_connection.sql("SELECT DISTINCT Anio FROM deaths").fetchall()
-        for year in years:
-            year = year[0]
-            db_connection.sql(f"""
-                CREATE OR REPLACE TABLE temp_defunciones_{year} AS
-                SELECT DISTINCT CVE_Enfermedad, CVE_Grupo, CVE_Causa_def, CVE_Estado,
-                CVEGEO, CVE_Metropoli, Ambito, Sexo, Edad_gpo, Ocupacion, Escolaridad, Edo_civil, Anio
-                FROM deaths
-                WHERE Anio = {year};
-            """)
+        db_connection.sql("""
+            CREATE OR REPLACE TABLE DEFUNCIONES AS
+            SELECT CVE_Enfermedad, CVE_Grupo, CVE_Causa_def, CVE_Estado,
+            CVEGEO, CVE_Metropoli, Ambito, Sexo, Edad_gpo, Ocupacion, Escolaridad, Edo_civil, Anio
+            FROM deaths;
+        """)
     except Exception as e:
         print(f"Error creating table: {e}")
         tables = db_connection.sql("SHOW TABLES").fetchall()
@@ -187,7 +182,7 @@ async def get_third_class_list(id_sick: str, id_second_class: str, con: DuckDBCo
 
 @app.get("/get_records_year")
 async def get_records_year(year: str, con: DuckDBConn = Depends(get_db)):
-    result = con.sql(f"SELECT * FROM temp_defunciones_{year};").fetchall()
+    result = con.sql(f"SELECT * FROM DEFUNCIONES WHERE Anio={year};").fetchall()
     return result
 
 @app.get("/get_unique")
