@@ -164,12 +164,12 @@ async def get_unique_columns(column1: str, column2: str, table: str, con: DuckDB
 @app.get("/get_second_level_class")
 async def get_second_class_list(id_first_level_class: str, ordered_by:str, con: DuckDBConn = Depends(get_db)):
     try:
-        if not id_first_level_class:
-            raise HTTPException(status_code=400, detail="Invalid input: id_first_level_class are required")
+        if not id_first_level_class or not ordered_by:
+            raise HTTPException(status_code=400, detail="Invalid input: id_first_level_class and ordered_by are required")
         result = con.sql("""
-            SELECT DISTINCT cve_grupo, grupo
+            SELECT DISTINCT CVE_Grupo, Grupo
             FROM ENFERMEDADES
-            WHERE cve_enfermedad = ?
+            WHERE CVE_Enfermedad = ?
             ORDER BY ?
         """, params=[id_first_level_class, ordered_by]).fetchall()
         return result if result else {"message": "No data found"}
