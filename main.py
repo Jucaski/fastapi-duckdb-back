@@ -43,22 +43,33 @@ def init_db():
             clean_csv_in_chunks('db/def00_19_v2.csv', 'db/cleaned_file.csv')
         db_connection.sql("""
             COPY (SELECT * FROM read_csv_auto('db/cleaned_file.csv', auto_detect=true, header=true))
-            TO 'db/deaths.parquet' (FORMAT PARQUET);
+            TO 'db/RAWDATA.parquet' (FORMAT PARQUET);
         """)
         db_connection.sql("""
-            CREATE OR REPLACE TABLE deaths AS
-            SELECT * FROM 'db/deaths.parquet';
+            CREATE OR REPLACE TABLE RAWDATA AS
+            SELECT * FROM 'db/RAWDATA.parquet';
         """)
         db_connection.sql("""
-            CREATE OR REPLACE TABLE ENFERMEDAD AS
+            CREATE OR REPLACE TABLE ENFERMEDADES AS
             SELECT DISTINCT CVE_Grupo, Grupo, CVE_Enfermedad, CVE_Causa_def, Causa_def
-            FROM deaths;
+            FROM RAWDATA;
         """)
+        db_connection.sql("CREATE INDEX IF NOT EXISTS id_enfermedad ON ENFERMEDADES (CVE_Enfermedad, CVE_Grupo, CVE_Causa_def);")
         db_connection.sql("""
             CREATE OR REPLACE TABLE DEFUNCIONES AS
             SELECT CVE_Enfermedad, CVE_Grupo, CVE_Causa_def, CVE_Estado,
             CVEGEO, CVE_Metropoli, Ambito, Sexo, Edad_gpo, Ocupacion, Escolaridad, Edo_civil, Anio
-            FROM deaths;
+            FROM RAWDATA;
+        """)
+        db_connection.sql("""
+            CREATE OR REPLACE TABLE ESTADO_MUN AS
+            SELECT DISTINCT CVE_Estado, Estado, CVEGEO, Municipio
+            FROM RAWDATA;
+        """)
+        db_connection.sql("""
+            CREATE OR REPLACE TABLE METROPOLI AS
+            SELECT DISTINCT CVE_Metropoli, Metropolis
+            FROM RAWDATA;
         """)
     except Exception as e:
         print(f"Error creating table: {e}")
@@ -123,7 +134,7 @@ async def create_table(con: DuckDBConn = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error creating table: {str(e)}")
 
-@app.get("/show")
+@app.get("/show/tables")
 async def lists2(con: DuckDBConn = Depends(get_db)):
     try:
         tables = con.sql("SHOW TABLES")
@@ -132,63 +143,80 @@ async def lists2(con: DuckDBConn = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Query error: {str(e)}")
 
-@app.get("/columns")
-async def get_columns(con: DuckDBConn = Depends(get_db)):
+@app.get("/show/columns")
+async def get_columns(table_name:str, con: DuckDBConn = Depends(get_db)):
     try:
-        rel = con.sql("DESCRIBE deaths")
+        rel = con.sql(f"DESCRIBE {table_name}")
         column_names = [row[0] for row in rel.fetchall()]
         return jsonable_encoder({"columns": column_names})
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Query error: {str(e)}")
 
-@app.get("/unique_columns")
-async def get_unique_columns(column1: str, column2: str, con: DuckDBConn = Depends(get_db)):
+@app.get("/unique_pair_columns")
+async def get_unique_columns(column1: str, column2: str, table: str, con: DuckDBConn = Depends(get_db)):
     try:
-        result = con.sql(f"SELECT DISTINCT {column1}, {column2} FROM deaths;").fetchall()
+        result = con.sql(f"SELECT DISTINCT {column1}, {column2} FROM {table};").fetchall()
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Query error: {str(e)}")
 
 
-@app.get("/get_second_class")
-async def get_second_class_list(id_sick: str, con: DuckDBConn = Depends(get_db)):
+@app.get("/get_second_level_class")
+async def get_second_class_list(id_first_level_class: str, ordered_by:str, con: DuckDBConn = Depends(get_db)):
     try:
-        if not id_sick:
-            raise HTTPException(status_code=400, detail="Invalid input: id_sick are required")
+        if not id_first_level_class:
+            raise HTTPException(status_code=400, detail="Invalid input: id_first_level_class are required")
         result = con.sql("""
             SELECT DISTINCT cve_grupo, grupo
-            FROM ENFERMEDAD
+            FROM ENFERMEDADES
             WHERE cve_enfermedad = ?
-            ORDER BY grupo
-        """, params=[id_sick]).fetchall()
+            ORDER BY ?
+        """, params=[id_first_level_class, ordered_by]).fetchall()
         return result if result else {"message": "No data found"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Query error: {str(e)}")
 
-@app.get("/get_third_class")
-async def get_third_class_list(id_sick: str, id_second_class: str, con: DuckDBConn = Depends(get_db)):
+@app.get("/get_third_level_class")
+async def get_third_class_list(id_first_level_class: str, id_second_class: str, ordered_by:str, con: DuckDBConn = Depends(get_db)):
     try:
         if not id_sick or not id_second_class:
-            raise HTTPException(status_code=400, detail="Invalid input: id_sick and id_second_class are required")
+            raise HTTPException(status_code=400, detail="Invalid input: id_first_level_class, id_second_class and ordered_by are required")
         result = con.sql("""
             SELECT DISTINCT cve_causa_def, causa_def
-            FROM ENFERMEDAD
+            FROM ENFERMEDADES
             WHERE cve_grupo = ? AND cve_enfermedad = ?
-            ORDER BY causa_def
-        """, params=[id_second_class, id_sick]).fetchall()
+            ORDER BY ?
+        """, params=[id_second_class, id_first_level_class, ordered_by]).fetchall()
         return result if result else {"message": "No data found"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Query error: {str(e)}")
 
-@app.get("/get_records_year")
-async def get_records_year(year: str, con: DuckDBConn = Depends(get_db)):
-    result = con.sql(f"SELECT * FROM DEFUNCIONES WHERE Anio={year};").fetchall()
-    return result
-
-@app.get("/get_unique")
-async def get_unique_values(column_name: str, con: DuckDBConn = Depends(get_db)):
+@app.get("/records_by_year_by_column")
+async def get_records_year(year: str, table:str, con: DuckDBConn = Depends(get_db)):
     try:
-        result = con.sql(f"SELECT DISTINCT {column_name} FROM deaths ORDER BY {column_name}").fetchall()
+        if not id_sick or not id_second_class:
+            raise HTTPException(status_code=400, detail="Invalid input: year and table are required")
+        result = con.sql(f"SELECT * FROM {table} WHERE Anio={year};").fetchall()
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Query error: {str(e)}")
+
+@app.get("/unique_values_by_column")
+async def get_unique_values(column_name: str, table:str, con: DuckDBConn = Depends(get_db)):
+    try:
+        if not column_name or not table:
+            raise HTTPException(status_code=400, detail="Invalid input: column_name and table are required")
+        result = con.sql(f"SELECT DISTINCT {column_name} FROM {table} ORDER BY {column_name}").fetchall()
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+@app.get("/get_all_by_table")
+async def get_unique_values(table:str, con: DuckDBConn = Depends(get_db)):
+    try:
+        if not table:
+            raise HTTPException(status_code=400, detail="Invalid input: column_name and table are required")
+        result = con.sql(f"SELECT * FROM {table}").fetchall()
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
