@@ -92,6 +92,15 @@ def test_show_tables(client):
     assert any(table["name"] == "RAWDATA" for table in data["tables"])
     assert any(table["name"] == "ENFERMEDADES" for table in data["tables"])
 
+# Test for /clean/column endpoint
+def test_show_tables(client):
+    response = client.get("/clean/columns_to_lower_case?table_name=RAWDATA")
+    assert response.status_code == 200
+    data = response.json()
+    assert "columns" in data
+    assert set(data["columns"]) == {"id", "name", "cause", "anio", "cve_grupo", "grupo", "cve_enfermedad", "cve_causa_def", "causa_def"}
+    assert set(data["columns"]) == {"Id", "Name", "Cause", "Anio", "CVE_Grupo", "Grupo", "CVE_Enfermedad", "CVE_Causa_def", "Causa_def"}
+
 # Test for /columns endpoint
 def test_get_columns(client):
     response = client.get("/show/columns?table_name=RAWDATA")

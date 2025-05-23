@@ -137,7 +137,6 @@ async def create_table(con: DuckDBConn = Depends(get_db)):
 @app.get("/clean/columns_to_lower_case")
 async def columns_to_lower_case(table_name: str, con: DuckDBConn = Depends(get_db)):
     try:
-        table_name = "deaths"
         columns_to_lower = con.sql(f"SELECT * FROM {table_name}").columns
         for column in columns_to_lower:
             if isinstance(column, str):
